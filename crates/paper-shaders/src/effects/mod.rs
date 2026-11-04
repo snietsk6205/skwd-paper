@@ -5,7 +5,7 @@ mod vulkan;
 
 pub use catalog::{EFFECTS, effect_index};
 pub use sketch::{
-    SKETCH_REVEAL_INDEX, SKETCH_STYLES, sketch_code, sketch_effect_index, sketch_style_index,
-    sketch_variant, sketch_variant_sources,
+    SKETCH_DENSITY_SIZE, SKETCH_STYLES, sketch_analysis_frag_vk, sketch_compose_frag_vk,
+    sketch_density_frag_vk, sketch_style_index,
 };
-pub use vulkan::effect_frag_vk;
+pub use vulkan::{ORIGIN_EFFECTS, effect_frag_vk};

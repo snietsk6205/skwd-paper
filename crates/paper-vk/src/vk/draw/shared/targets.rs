@@ -1,11 +1,85 @@
 use super::super::model::Src;
 use super::model::{AvvkFrame, WaitSems, avvk_frame};
+#[cfg(feature = "shared-device")]
+use crate::vk::sketch::SketchStep;
 use crate::vk::{ExportImage, FrameImages, ReadbackBuf, RenderTarget, Renderer};
 use anyhow::{Context, Result, anyhow};
 use ash::vk;
 use ash::vk::Handle;
 
+/// UV transform of a texture that already matches the screen.
+pub(super) const IDENTITY_UV: [f32; 4] = [1.0, 1.0, 0.0, 0.0];
+
+/// Push block of every transition pipeline (effects, sand, sketch passes);
+/// mirrors the `PC` blocks in paper-shaders. 80 bytes.
+#[repr(C)]
+pub(super) struct TransitionPush {
+    pub(super) res: [f32; 2],
+    pub(super) progress: f32,
+    pub(super) style: i32,
+    pub(super) pid_base: i32,
+    pub(super) fill: i32,
+    pub(super) rgba_a: i32,
+    pub(super) rgba_b: i32,
+    pub(super) uv_a: [f32; 4],
+    pub(super) uv_b: [f32; 4],
+    /// Start point in screen UV (y down), used when `origin_on` is 1.
+    pub(super) origin: [f32; 2],
+    pub(super) origin_on: i32,
+    pub(super) seed: i32,
+}
+
+const _: () = assert!(
+    std::mem::size_of::<TransitionPush>() == crate::vk::pipelines::TRANSITION_PUSH_BYTES as usize
+);
+
 impl Renderer {
+    /// Push block for a transition draw, with the current start point.
+    #[cfg(feature = "shared-device")]
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn transition_push(
+        &self,
+        src_a: &Src,
+        uv_a: [f32; 4],
+        src_b: &Src,
+        uv_b: [f32; 4],
+        progress: f32,
+        style: i32,
+        pid_base: i32,
+    ) -> TransitionPush {
+        let (origin, origin_on) = self.sketch.origin.map_or(([0.5, 0.5], 0), |origin| (origin, 1));
+        TransitionPush {
+            res: [self.extent.width as f32, self.extent.height as f32],
+            progress,
+            style,
+            pid_base,
+            fill: crate::fill_flag(),
+            rgba_a: i32::from(matches!(src_a, Src::Rgba(_))),
+            rgba_b: i32::from(matches!(src_b, Src::Rgba(_))),
+            uv_a,
+            uv_b,
+            origin,
+            origin_on,
+            seed: self.sketch.seed,
+        }
+    }
+
+    #[cfg(feature = "shared-device")]
+    pub(super) fn push_transition(&self, push: &TransitionPush) {
+        unsafe {
+            self.device.cmd_push_constants(
+                self.cmd,
+                self.pipeline_layout_sand,
+                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                0,
+                std::slice::from_raw_parts(
+                    std::ptr::from_ref(push).cast::<u8>(),
+                    std::mem::size_of::<TransitionPush>(),
+                ),
+            );
+        }
+    }
+
     #[cfg(feature = "shared-device")]
     pub fn render_video_texture(
         &mut self,
@@ -125,7 +199,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "shared-device")]
-    fn resolve_src<'a>(src: &Src<'a>) -> Result<Option<AvvkFrame<'a>>> {
+    pub(super) fn resolve_src<'a>(src: &Src<'a>) -> Result<Option<AvvkFrame<'a>>> {
         match src {
             Src::Avvk(frame) => Ok(Some(avvk_frame(frame)?)),
             Src::Imported(_) | Src::Views(_, _) | Src::Rgba(_) => Ok(None),
@@ -133,7 +207,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "shared-device")]
-    fn imported_frames<'a>(srcs: &[&'a Src<'a>]) -> Vec<&'a FrameImages> {
+    pub(super) fn imported_frames<'a>(srcs: &[&'a Src<'a>]) -> Vec<&'a FrameImages> {
         let mut frames: Vec<&FrameImages> = Vec::new();
         for src in srcs {
             let Src::Imported(frame) = src else {
@@ -147,7 +221,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "shared-device")]
-    fn acquire_imports(&self, srcs: &[&Src]) {
+    pub(super) fn acquire_imports(&self, srcs: &[&Src]) {
         let frames = Self::imported_frames(srcs);
         if frames.is_empty() {
             return;
@@ -185,7 +259,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "shared-device")]
-    fn release_imports(&self, srcs: &[&Src]) {
+    pub(super) fn release_imports(&self, srcs: &[&Src]) {
         let frames = Self::imported_frames(srcs);
         if frames.is_empty() {
             return;
@@ -226,14 +300,14 @@ impl Renderer {
     }
 
     #[cfg(feature = "shared-device")]
-    fn note_imports(srcs: &[&Src]) {
+    pub(super) fn note_imports(srcs: &[&Src]) {
         for frame in Self::imported_frames(srcs) {
             frame.ready.set(true);
         }
     }
 
     #[cfg(feature = "shared-device")]
-    fn present_pipeline(&self, src: &Src) -> vk::Pipeline {
+    pub(super) fn present_pipeline(&self, src: &Src) -> vk::Pipeline {
         match src {
             Src::Rgba(_) => self.pipeline_rgba,
             _ => self.pipeline,
@@ -249,7 +323,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "shared-device")]
-    fn ensure_src_pipelines(&mut self, srcs: &[&Src]) -> Result<()> {
+    pub(super) fn ensure_src_pipelines(&mut self, srcs: &[&Src]) -> Result<()> {
         if srcs.iter().any(|src| matches!(src, Src::Rgba(_))) {
             self.ensure_rgba_pipelines()?;
         }
@@ -257,7 +331,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "shared-device")]
-    fn bind_src(
+    pub(super) fn bind_src(
         &mut self,
         set: vk::DescriptorSet,
         src: &Src,
@@ -289,6 +363,7 @@ impl Renderer {
         src: &Src,
         uv: [f32; 4],
     ) -> Result<()> {
+        self.release_idle_sketch()?;
         let uv = src.texture_uv(uv);
         self.ensure_src_pipelines(&[src])?;
         unsafe {
@@ -326,7 +401,11 @@ impl Renderer {
         Ok(())
     }
 
+    /// Cross-fade from `src_a` to `src_b`; `mix` is the eased progress.
+    /// With "sketch before transition" on, the sketch is drawn first and the
+    /// fade then runs from the finished sketch.
     #[cfg(feature = "shared-device")]
+    #[allow(clippy::too_many_arguments)]
     pub fn render_fade_to(
         &mut self,
         rt: &RenderTarget,
@@ -337,19 +416,35 @@ impl Renderer {
         uv_b: [f32; 4],
         mix: f32,
     ) -> Result<()> {
-        if let Some(sketch) = crate::sketch::current() {
-            return self.render_effect_code_to(
-                rt,
-                export,
-                src_a,
-                uv_a,
-                src_b,
-                uv_b,
-                crate::sketch::unease(mix),
-                paper_shaders::SKETCH_REVEAL_INDEX,
-                sketch.code(),
-            );
+        if !crate::sketch::settings().active() {
+            return self.render_fade_plain(rt, export, src_a, uv_a, src_b, uv_b, mix);
         }
+        match self.sketch_step(src_b, uv_b, crate::sketch::unease(mix))? {
+            SketchStep::Plain(t) => {
+                self.render_fade_plain(rt, export, src_a, uv_a, src_b, uv_b, crate::sketch::ease(t))
+            }
+            SketchStep::Drawing(q) => self.render_sketch_frame(rt, export, src_a, uv_a, q),
+            SketchStep::FromSketch(t) => {
+                let from = Src::Rgba(self.sketch_finished_view()?);
+                let mix = crate::sketch::ease(t);
+                self.render_fade_plain(rt, export, &from, IDENTITY_UV, src_b, uv_b, mix)
+            }
+            SketchStep::Done => self.render_to(rt, export, src_b, uv_b),
+        }
+    }
+
+    #[cfg(feature = "shared-device")]
+    #[allow(clippy::too_many_arguments)]
+    fn render_fade_plain(
+        &mut self,
+        rt: &RenderTarget,
+        export: &mut ExportImage,
+        src_a: &Src,
+        uv_a: [f32; 4],
+        src_b: &Src,
+        uv_b: [f32; 4],
+        mix: f32,
+    ) -> Result<()> {
         let uv_a = src_a.texture_uv(uv_a);
         let uv_b = src_b.texture_uv(uv_b);
         self.ensure_transition_pipelines()?;
@@ -394,7 +489,9 @@ impl Renderer {
         Ok(())
     }
 
+    /// Effect transition `fx`, with the optional sketch prelude.
     #[cfg(feature = "shared-device")]
+    #[allow(clippy::too_many_arguments)]
     pub fn render_effect_to(
         &mut self,
         rt: &RenderTarget,
@@ -406,15 +503,25 @@ impl Renderer {
         progress: f32,
         fx: usize,
     ) -> Result<()> {
-        let (fx, code) = match crate::sketch::current() {
-            Some(sketch) => (paper_shaders::sketch_effect_index(fx), sketch.code()),
-            None => (fx, 0),
-        };
-        self.render_effect_code_to(rt, export, src_a, uv_a, src_b, uv_b, progress, fx, code)
+        if !crate::sketch::settings().active() {
+            return self.render_effect_plain(rt, export, src_a, uv_a, src_b, uv_b, progress, fx);
+        }
+        match self.sketch_step(src_b, uv_b, progress)? {
+            SketchStep::Plain(t) => {
+                self.render_effect_plain(rt, export, src_a, uv_a, src_b, uv_b, t, fx)
+            }
+            SketchStep::Drawing(q) => self.render_sketch_frame(rt, export, src_a, uv_a, q),
+            SketchStep::FromSketch(t) => {
+                let from = Src::Rgba(self.sketch_finished_view()?);
+                self.render_effect_plain(rt, export, &from, IDENTITY_UV, src_b, uv_b, t, fx)
+            }
+            SketchStep::Done => self.render_to(rt, export, src_b, uv_b),
+        }
     }
 
     #[cfg(feature = "shared-device")]
-    fn render_effect_code_to(
+    #[allow(clippy::too_many_arguments)]
+    fn render_effect_plain(
         &mut self,
         rt: &RenderTarget,
         export: &mut ExportImage,
@@ -424,7 +531,6 @@ impl Renderer {
         uv_b: [f32; 4],
         progress: f32,
         fx: usize,
-        code: i32,
     ) -> Result<()> {
         let uv_a = src_a.texture_uv(uv_a);
         let uv_b = src_b.texture_uv(uv_b);
@@ -449,29 +555,8 @@ impl Renderer {
             self.sample_barrier(&barriers, vk::PipelineStageFlags::FRAGMENT_SHADER);
         }
         self.begin_clear_pass(rt.framebuffer);
-        #[repr(C)]
-        struct FxPush {
-            res: [f32; 2],
-            progress: f32,
-            style: i32,
-            pid_base: i32,
-            fill: i32,
-            rgba_a: i32,
-            rgba_b: i32,
-            uv_a: [f32; 4],
-            uv_b: [f32; 4],
-        }
-        let push = FxPush {
-            res: [self.extent.width as f32, self.extent.height as f32],
-            progress: progress.clamp(0.0, 1.0),
-            style: fx as i32,
-            pid_base: code,
-            fill: crate::fill_flag(),
-            rgba_a: i32::from(matches!(src_a, Src::Rgba(_))),
-            rgba_b: i32::from(matches!(src_b, Src::Rgba(_))),
-            uv_a,
-            uv_b,
-        };
+        let push =
+            self.transition_push(src_a, uv_a, src_b, uv_b, progress.clamp(0.0, 1.0), fx as i32, 0);
         unsafe {
             self.device.cmd_bind_descriptor_sets(
                 self.cmd,
@@ -481,13 +566,9 @@ impl Renderer {
                 &[self.desc_set, self.desc_set_b],
                 &[],
             );
-            self.device.cmd_push_constants(
-                self.cmd,
-                self.pipeline_layout_sand,
-                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                0,
-                std::slice::from_raw_parts((&raw const push).cast(), 64),
-            );
+        }
+        self.push_transition(&push);
+        unsafe {
             self.device.cmd_bind_pipeline(self.cmd, vk::PipelineBindPoint::GRAPHICS, pipe);
             self.device.cmd_draw(self.cmd, 3, 1, 0, 0);
             self.device.cmd_end_render_pass(self.cmd);
@@ -507,7 +588,10 @@ impl Renderer {
         Ok(())
     }
 
+    /// Sand transition `style`, with the optional sketch prelude: the real
+    /// sand transition then runs from the finished sketch.
     #[cfg(feature = "shared-device")]
+    #[allow(clippy::too_many_arguments)]
     pub fn render_sand_to(
         &mut self,
         rt: &RenderTarget,
@@ -519,19 +603,35 @@ impl Renderer {
         progress: f32,
         style: i32,
     ) -> Result<()> {
-        if let Some(sketch) = crate::sketch::current() {
-            return self.render_effect_code_to(
-                rt,
-                export,
-                src_a,
-                uv_a,
-                src_b,
-                uv_b,
-                progress,
-                paper_shaders::SKETCH_REVEAL_INDEX,
-                sketch.code(),
-            );
+        if !crate::sketch::settings().active() {
+            return self.render_sand_plain(rt, export, src_a, uv_a, src_b, uv_b, progress, style);
         }
+        match self.sketch_step(src_b, uv_b, progress)? {
+            SketchStep::Plain(t) => {
+                self.render_sand_plain(rt, export, src_a, uv_a, src_b, uv_b, t, style)
+            }
+            SketchStep::Drawing(q) => self.render_sketch_frame(rt, export, src_a, uv_a, q),
+            SketchStep::FromSketch(t) => {
+                let from = Src::Rgba(self.sketch_finished_view()?);
+                self.render_sand_plain(rt, export, &from, IDENTITY_UV, src_b, uv_b, t, style)
+            }
+            SketchStep::Done => self.render_to(rt, export, src_b, uv_b),
+        }
+    }
+
+    #[cfg(feature = "shared-device")]
+    #[allow(clippy::too_many_arguments)]
+    fn render_sand_plain(
+        &mut self,
+        rt: &RenderTarget,
+        export: &mut ExportImage,
+        src_a: &Src,
+        uv_a: [f32; 4],
+        src_b: &Src,
+        uv_b: [f32; 4],
+        progress: f32,
+        style: i32,
+    ) -> Result<()> {
         let uv_a = src_a.texture_uv(uv_a);
         let uv_b = src_b.texture_uv(uv_b);
         self.ensure_transition_pipelines()?;
@@ -558,30 +658,8 @@ impl Renderer {
             );
         }
         self.begin_clear_pass(rt.framebuffer);
-        #[repr(C)]
-        struct SandPush {
-            res: [f32; 2],
-            progress: f32,
-            style: i32,
-            pid_base: i32,
-            fill: i32,
-            rgba_a: i32,
-            rgba_b: i32,
-            uv_a: [f32; 4],
-            uv_b: [f32; 4],
-        }
         let (base, count) = paper_shaders::sand_window(style, progress);
-        let push = SandPush {
-            res: [self.extent.width as f32, self.extent.height as f32],
-            progress,
-            style,
-            pid_base: base,
-            fill: crate::fill_flag(),
-            rgba_a: i32::from(matches!(src_a, Src::Rgba(_))),
-            rgba_b: i32::from(matches!(src_b, Src::Rgba(_))),
-            uv_a,
-            uv_b,
-        };
+        let push = self.transition_push(src_a, uv_a, src_b, uv_b, progress, style, base);
         unsafe {
             self.device.cmd_bind_descriptor_sets(
                 self.cmd,
@@ -591,14 +669,8 @@ impl Renderer {
                 &[self.desc_set, self.desc_set_b],
                 &[],
             );
-            self.device.cmd_push_constants(
-                self.cmd,
-                self.pipeline_layout_sand,
-                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                0,
-                std::slice::from_raw_parts((&raw const push).cast(), 64),
-            );
         }
+        self.push_transition(&push);
         unsafe {
             self.device.cmd_bind_pipeline(
                 self.cmd,

@@ -46,7 +46,8 @@ fn scene_fade_step(ratio: Option<f32>, first_frame: bool) -> SceneFadeStep {
 }
 
 fn scene_duration_cap() -> u64 {
-    if crate::sketch::current().is_some() { 10_000 } else { 4000 }
+    // A sketch before the transition needs the longer timeline the daemon asked for.
+    if crate::sketch::settings().sketch.is_some() { 10_000 } else { 4000 }
 }
 
 fn scene_swap_duration(duration_ms: u64) -> Option<u64> {
@@ -1253,6 +1254,7 @@ impl Presenter {
         let Some(source) = &group.from else {
             return self.present(&group.target, buffer_index);
         };
+        self.renderer.set_transition_media(crate::sketch::SketchMedia::Scene);
         if progress <= 0.0 {
             return match &source.source {
                 FadeFrom::Scene(target) => self.present(target, buffer_index),

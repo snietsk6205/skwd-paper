@@ -6,6 +6,7 @@ mod nv12;
 mod pipelines;
 mod renderer;
 mod scene;
+pub(crate) mod sketch;
 mod swapchain;
 mod upload;
 

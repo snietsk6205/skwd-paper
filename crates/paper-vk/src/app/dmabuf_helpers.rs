@@ -735,6 +735,11 @@ pub(super) fn render_video(
     if t >= 1.0 {
         return renderer.render_to(rt, export, &src_b, uv_b);
     }
+    renderer.set_transition_media(if fade.still_b {
+        crate::sketch::SketchMedia::Image
+    } else {
+        crate::sketch::SketchMedia::Video
+    });
     match (fade.style, fade.effect) {
         (Some(style), _) => {
             renderer.render_sand_to(rt, export, &src_a, uv_a, &src_b, uv_b, t, style)

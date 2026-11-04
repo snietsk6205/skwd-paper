@@ -267,3 +267,47 @@ fn vk_shaders_carry_fill_guard() {
     assert!(!SAND_BASE_FRAG_GL.contains("u_fill"));
     assert!(!SAND_GRAIN_FRAG_GL.contains("u_fill"));
 }
+
+#[test]
+fn origin_edits_match_their_effects_exactly_once() {
+    for (name, edits) in ORIGIN_EFFECTS {
+        let (_, gl) = EFFECTS.iter().find(|(effect, _)| *effect == name).expect("known effect");
+        let vk = effect_frag_vk(gl);
+        for (from, to) in edits {
+            assert_eq!(gl.matches(from).count(), 1, "{name}: '{from}' must match once");
+            assert!(vk.contains(to), "{name}: edit '{to}' missing");
+        }
+        assert!(vk.contains("fx_origin("), "{name}");
+    }
+    for (name, gl) in EFFECTS {
+        if !ORIGIN_EFFECTS.iter().any(|(effect, _)| *effect == name) {
+            assert!(!effect_frag_vk(gl).contains("= fx_origin("), "{name} edited unexpectedly");
+        }
+    }
+}
+
+#[test]
+fn origin_lives_in_every_transition_push_block() {
+    let fx = effect_frag_vk(EFFECTS[0].1);
+    let sand = sand_grain_point_vert(Dialect::Vulkan450);
+    for src in [fx.as_str(), sand.as_str()] {
+        assert!(
+            src.contains("vec4 u_uv_b;\n    vec2 u_origin;\n    int u_origin_on;\n    int u_seed;")
+        );
+    }
+    assert!(sand.contains("vec2 center = (u_origin_on != 0 ? u_origin : vec2(0.5)) * u_res;"));
+    assert!(sand_grain_vert(Dialect::Gl330).contains("vec2 center = u_res * 0.5;"));
+}
+
+#[test]
+fn sketch_passes_share_the_header() {
+    for src in [sketch_analysis_frag_vk(), sketch_compose_frag_vk(), sketch_density_frag_vk()] {
+        assert!(src.starts_with("#version 450"));
+        assert_eq!(src.matches("void main()").count(), 1);
+        assert!(src.contains("vec2 u_origin;") && src.contains("int u_seed;"));
+    }
+    assert!(sketch_compose_frag_vk().contains("frag = vec4(clamp(col, 0.0, 1.0), cover);"));
+    assert_eq!(sketch_style_index("chalk"), 2);
+    assert_eq!(sketch_style_index("unknown"), 0);
+    assert_eq!(SKETCH_STYLES.len(), 7);
+}

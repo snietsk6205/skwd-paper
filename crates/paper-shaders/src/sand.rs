@@ -78,6 +78,9 @@ layout(push_constant) uniform PC {
     int u_fill;
     vec4 u_uv_a;
     vec4 u_uv_b;
+    vec2 u_origin;
+    int u_origin_on;
+    int u_seed;
 };
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out float v_alpha;
@@ -97,7 +100,13 @@ pub fn sand_grain_vert(dialect: Dialect) -> String {
                 // GL NDC Y points up; a positive-height Vulkan viewport points it down.
                 .replace("1.0 - world8.y / u_res.y * 2.0", "world8.y / u_res.y * 2.0 - 1.0")
                 .replace("1.0 - worldN.y / u_res.y * 2.0", "worldN.y / u_res.y * 2.0 - 1.0")
-                .replace("1.0 - world.y / u_res.y * 2.0", "world.y / u_res.y * 2.0 - 1.0");
+                .replace("1.0 - world.y / u_res.y * 2.0", "world.y / u_res.y * 2.0 - 1.0")
+                // The swirl centre follows the transition start point when one is set.
+                .replacen(
+                    "vec2 center = u_res * 0.5;",
+                    "vec2 center = (u_origin_on != 0 ? u_origin : vec2(0.5)) * u_res;",
+                    1,
+                );
             format!("{VK_VERT_PROLOG}{body}")
         }
     }

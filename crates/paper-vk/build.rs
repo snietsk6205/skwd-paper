@@ -49,18 +49,16 @@ fn main() {
             "    include_bytes!(concat!(env!(\"OUT_DIR\"), \"/fx_{idx}.frag.spv\")),\n"
         ));
     }
-    let base = paper_shaders::EFFECTS.len();
-    for (offset, gl_src) in paper_shaders::sketch_variant_sources().iter().enumerate() {
-        let idx = base + offset;
-        let frag = format!("{out}/fx_{idx}.frag");
-        std::fs::write(&frag, paper_shaders::effect_frag_vk(gl_src))
-            .unwrap_or_else(|_| panic!("write sketch fx {idx}"));
-        compile(&frag, &format!("{out}/fx_{idx}.frag.spv"));
-        table.push_str(&format!(
-            "    include_bytes!(concat!(env!(\"OUT_DIR\"), \"/fx_{idx}.frag.spv\")),\n"
-        ));
-    }
     table.push_str("];\n");
+    for (name, source) in [
+        ("sketch_analysis", paper_shaders::sketch_analysis_frag_vk()),
+        ("sketch_compose", paper_shaders::sketch_compose_frag_vk()),
+        ("sketch_density", paper_shaders::sketch_density_frag_vk()),
+    ] {
+        let frag = format!("{out}/{name}.frag");
+        std::fs::write(&frag, source).unwrap_or_else(|_| panic!("write {name}"));
+        compile(&frag, &format!("{out}/{name}.frag.spv"));
+    }
     std::fs::write(format!("{out}/effects_gen.rs"), table).expect("write effects table");
 }
 

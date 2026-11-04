@@ -73,7 +73,7 @@ impl Renderer {
 
             let sand_push = [vk::PushConstantRange::default()
                 .stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-                .size(64)];
+                .size(TRANSITION_PUSH_BYTES)];
             let sand_sets = [desc_layout, desc_layout];
             let pipeline_layout_sand = device.create_pipeline_layout(
                 &vk::PipelineLayoutCreateInfo::default()
@@ -186,6 +186,66 @@ impl Renderer {
 
 #[cfg(feature = "shared-device")]
 include!(concat!(env!("OUT_DIR"), "/effects_gen.rs"));
+
+/// Size of the transition push block (see `draw::shared::targets::TransitionPush`).
+pub(crate) const TRANSITION_PUSH_BYTES: u32 = 80;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SketchPipe {
+    Analysis,
+    Compose,
+    Density,
+}
+
+impl Renderer {
+    /// Builds one of the "sketch before transition" pipelines. They use the
+    /// transition layout; `Compose` blends its coverage over what is below.
+    pub(crate) fn build_sketch_pipeline(
+        &self,
+        kind: SketchPipe,
+        render_pass: vk::RenderPass,
+        extent: vk::Extent2D,
+    ) -> Result<vk::Pipeline> {
+        let frag: &[u8] = match kind {
+            SketchPipe::Analysis => {
+                include_bytes!(concat!(env!("OUT_DIR"), "/sketch_analysis.frag.spv"))
+            }
+            SketchPipe::Compose => {
+                include_bytes!(concat!(env!("OUT_DIR"), "/sketch_compose.frag.spv"))
+            }
+            SketchPipe::Density => {
+                include_bytes!(concat!(env!("OUT_DIR"), "/sketch_density.frag.spv"))
+            }
+        };
+        let mut blend = vk::PipelineColorBlendAttachmentState::default()
+            .color_write_mask(vk::ColorComponentFlags::RGBA);
+        if kind == SketchPipe::Compose {
+            blend = blend
+                .blend_enable(true)
+                .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .color_blend_op(vk::BlendOp::ADD)
+                .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .alpha_blend_op(vk::BlendOp::ADD);
+        }
+        unsafe {
+            build_pipeline(
+                &self.device,
+                &PipelineSpec {
+                    vert: include_bytes!(concat!(env!("OUT_DIR"), "/sand_base.vert.spv")),
+                    frag,
+                    topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+                    blend,
+                    dynamic: &[],
+                    layout: self.pipeline_layout_sand,
+                    render_pass,
+                    extent,
+                },
+            )
+        }
+    }
+}
 
 fn make_module(device: &ash::Device, bytes: &[u8]) -> Result<vk::ShaderModule> {
     let words: Vec<u32> = bytes

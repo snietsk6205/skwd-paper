@@ -1,6 +1,5 @@
 ---
 source: crates/paper-shaders/src/tests.rs
-assertion_line: 116
 expression: "sand_grain_vert(Dialect::Vulkan450)"
 ---
 #version 450
@@ -12,6 +11,9 @@ layout(push_constant) uniform PC {
     int u_fill;
     vec4 u_uv_a;
     vec4 u_uv_b;
+    vec2 u_origin;
+    int u_origin_on;
+    int u_seed;
 };
 layout(location = 0) out vec2 v_uv;
 layout(location = 1) out float v_alpha;
@@ -60,7 +62,7 @@ void main() {
     vec2 dc = uvp - 0.5;
     uint id = uint(gid) + (role_b ? 7919u : 0u);
     float h = hp(id, 1u);
-    vec2 center = u_res * 0.5;
+    vec2 center = (u_origin_on != 0 ? u_origin : vec2(0.5)) * u_res;
     vec2 home = uvp * u_res;
     float nd = mix(
         clamp(max(abs(dc.x), abs(dc.y)) * 2.0, 0.0, 1.0),

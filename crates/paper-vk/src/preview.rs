@@ -123,13 +123,21 @@ pub(crate) fn stream(
     let span = duration_ms + 600;
     let started = Instant::now();
     let mut frames = 0u64;
+    let test = PreviewTest::from_env();
+    renderer.set_transition_media(test.media);
     loop {
         let frame_deadline = Instant::now() + frame_interval;
         let elapsed = started.elapsed().as_millis() as u64;
-        let reverse = (elapsed / span) % 2 == 1;
-        let progress = ((elapsed % span) as f32 / duration_ms as f32).clamp(0.0, 1.0);
+        let reverse = test.steps.is_none() && (elapsed / span) % 2 == 1;
+        let progress = test.steps.map_or_else(
+            || ((elapsed % span) as f32 / duration_ms as f32).clamp(0.0, 1.0),
+            |steps| (frames as f32 / steps as f32).min(1.0),
+        );
         let (a, a_uv, b, b_uv) = if reverse {
             (&to_texture, to_uv, &from_texture, from_uv)
+        } else if test.flicker && frames % 2 == 1 {
+            // Test hook: a "video" whose frames keep changing after the first.
+            (&from_texture, from_uv, &from_texture, from_uv)
         } else {
             (&from_texture, from_uv, &to_texture, to_uv)
         };
@@ -186,9 +194,41 @@ pub(crate) fn stream(
         if unsafe { libc::getppid() } <= 1 {
             return Ok(());
         }
+        if test.steps.is_some() {
+            continue;
+        }
         if let Some(delay) = frame_deadline.checked_duration_since(Instant::now()) {
             std::thread::sleep(delay);
         }
+    }
+}
+
+/// Developer hook for repeatable preview frames:
+/// `SKWD_PAPER_PREVIEW_TEST=steps=40;flicker=1` renders exactly 40 steps
+/// without waiting, and with `flicker` swaps the incoming picture on odd
+/// frames (like a video whose content changes after its first frame);
+/// `media=video|scene` makes the preview treat the new wallpaper as that kind.
+#[derive(Default)]
+struct PreviewTest {
+    steps: Option<u32>,
+    flicker: bool,
+    media: crate::sketch::SketchMedia,
+}
+
+impl PreviewTest {
+    fn from_env() -> Self {
+        let text = std::env::var("SKWD_PAPER_PREVIEW_TEST").unwrap_or_default();
+        let mut test = Self::default();
+        for part in text.split(';') {
+            match part.trim().split_once('=') {
+                Some(("steps", value)) => test.steps = value.parse().ok().filter(|n| *n > 0),
+                Some(("flicker", value)) => test.flicker = value == "1",
+                Some(("media", "video")) => test.media = crate::sketch::SketchMedia::Video,
+                Some(("media", "scene")) => test.media = crate::sketch::SketchMedia::Scene,
+                _ => {}
+            }
+        }
+        test
     }
 }
 

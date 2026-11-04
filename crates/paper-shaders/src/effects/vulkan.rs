@@ -9,6 +9,9 @@ layout(push_constant) uniform PC {
     int u_rgba_b;
     vec4 u_uv_a;
     vec4 u_uv_b;
+    vec2 u_origin;
+    int u_origin_on;
+    int u_seed;
 };
 layout(set = 0, binding = 0) uniform sampler2D luma_a;
 layout(set = 0, binding = 1) uniform sampler2D chroma_a;
@@ -47,6 +50,18 @@ float vk_hash1(vec2 p) {
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
 }
+// Start point chosen by the renderer (screen UV, y down), or the effect's own.
+vec2 fx_origin(vec2 fallback) {
+    return u_origin_on != 0 ? u_origin : fallback;
+}
+float fx_reach(vec2 o) {
+    vec2 far = max(o, vec2(1.0) - o) * vec2(1.7777, 1.0);
+    return length(far);
+}
+// Grows a reveal radius so it still covers the far corner from a moved origin.
+float fx_scale(vec2 fallback) {
+    return u_origin_on != 0 ? max(1.0, fx_reach(u_origin) / fx_reach(fallback)) : 1.0;
+}
 vec2 vk_hash2(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
     p3 += dot(p3, p3.yzx + 33.33);
@@ -65,6 +80,60 @@ fn desin_hashes(body: &str) -> String {
     )
     .unwrap();
     one.replace_all(&body, "vk_hash1($1)").into_owned()
+}
+
+/// Effects that grow from a point, and the source edits that let the
+/// renderer move that point (`fx_origin`). Each edit must match exactly once
+/// in that effect's source; the tests fail if upstream changes them.
+pub const ORIGIN_EFFECTS: [(&str, &[(&str, &str)]); 8] = [
+    (
+        "iris",
+        &[
+            ("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));"),
+            ("float r = u_progress * 1.2;", "float r = u_progress * 1.2 * fx_scale(vec2(0.5));"),
+        ],
+    ),
+    (
+        "ink-splash",
+        &[
+            ("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));"),
+            (
+                "float boundary = p * 1.7 - 0.15;",
+                "float boundary = p * 1.7 * fx_scale(vec2(0.5)) - 0.15;",
+            ),
+        ],
+    ),
+    (
+        "inkwell-drop",
+        &[
+            ("vec2 impact = vec2(0.35, 0.4);", "vec2 impact = fx_origin(vec2(0.35, 0.4));"),
+            ("float front = p * 1.5;", "float front = p * 1.5 * fx_scale(vec2(0.35, 0.4));"),
+        ],
+    ),
+    ("chromatic-bloom", &[("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));")]),
+    ("smoke", &[("vec2 center = uv - 0.5;", "vec2 center = uv - fx_origin(vec2(0.5));")]),
+    (
+        "circle-crop",
+        &[
+            (
+                "float dist = length((vec2(p) - 0.5) * ratio2);",
+                "float dist = length((vec2(p) - fx_origin(vec2(0.5))) * ratio2);",
+            ),
+            ("step(s, dist)", "step(s * fx_scale(vec2(0.5)), dist)"),
+        ],
+    ),
+    ("crosshatch", &[("const vec2 center = vec2(0.5);", "vec2 center = fx_origin(vec2(0.5));")]),
+    (
+        "polka-dots-curtain",
+        &[("const vec2 center = vec2(0, 0);", "vec2 center = fx_origin(vec2(0.0));")],
+    ),
+];
+
+fn origin_edits(gl_src: &str) -> Option<&'static [(&'static str, &'static str)]> {
+    ORIGIN_EFFECTS.iter().find_map(|(name, edits)| {
+        let (_, src) = super::EFFECTS.iter().find(|(effect, _)| effect == name)?;
+        (*src == gl_src).then_some(*edits)
+    })
 }
 
 pub fn effect_frag_vk(gl_src: &str) -> String {
@@ -96,6 +165,9 @@ pub fn effect_frag_vk(gl_src: &str) -> String {
         .replace("texture(u_tex_new,", "texB(")
         .replace("sample_thumb(idx, mrp)", "texB(mrp)")
         .replace("u_thumb_count", "0");
-    let body = desin_hashes(&body);
+    let mut body = desin_hashes(&body);
+    for (from, to) in origin_edits(gl_src).unwrap_or_default() {
+        body = body.replacen(from, to, 1);
+    }
     format!("{VK_EFFECT_HEADER}{body}")
 }
