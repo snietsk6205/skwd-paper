@@ -3,7 +3,10 @@
 mod effects;
 mod sand;
 
-pub use effects::{EFFECTS, effect_frag_vk, effect_index};
+pub use effects::{
+    EFFECTS, SKETCH_REVEAL_INDEX, SKETCH_STYLES, effect_frag_vk, effect_index, sketch_code,
+    sketch_effect_index, sketch_style_index, sketch_variant, sketch_variant_sources,
+};
 pub use sand::{
     Dialect, SAND_A_ONLY_BELOW, SAND_B_ONLY_FROM, SAND_BASE_FRAG_GL, SAND_BASE_FRAG_VK,
     SAND_GRAIN_FRAG_GL, SAND_GRAIN_FRAG_VK, SAND_GRAIN_GH, SAND_GRAIN_GW, SAND_GRAIN_INSTANCES,

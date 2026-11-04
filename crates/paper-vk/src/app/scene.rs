@@ -45,8 +45,12 @@ fn scene_fade_step(ratio: Option<f32>, first_frame: bool) -> SceneFadeStep {
     SceneFadeStep { mix, render_transition: true, finish_after_commit: mix >= 1.0 }
 }
 
+fn scene_duration_cap() -> u64 {
+    if crate::sketch::current().is_some() { 10_000 } else { 4000 }
+}
+
 fn scene_swap_duration(duration_ms: u64) -> Option<u64> {
-    (duration_ms > 0).then(|| duration_ms.clamp(80, 4000))
+    (duration_ms > 0).then(|| duration_ms.clamp(80, scene_duration_cap()))
 }
 
 struct LayerFx {
@@ -4414,7 +4418,7 @@ pub(super) fn run_scene(
     let mut fade_ms = start_fade
         .as_ref()
         .filter(|sf| !sf.from.is_empty())
-        .map_or(0u64, |sf| sf.duration_ms.clamp(80, 4000));
+        .map_or(0u64, |sf| sf.duration_ms.clamp(80, scene_duration_cap()));
     if fade_ms > 0
         && let Some(sf) = &start_fade
         && let Err(err) = load_from_frame(&mut group, &sf.from)

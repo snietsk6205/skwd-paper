@@ -337,6 +337,19 @@ impl Renderer {
         uv_b: [f32; 4],
         mix: f32,
     ) -> Result<()> {
+        if let Some(sketch) = crate::sketch::current() {
+            return self.render_effect_code_to(
+                rt,
+                export,
+                src_a,
+                uv_a,
+                src_b,
+                uv_b,
+                crate::sketch::unease(mix),
+                paper_shaders::SKETCH_REVEAL_INDEX,
+                sketch.code(),
+            );
+        }
         let uv_a = src_a.texture_uv(uv_a);
         let uv_b = src_b.texture_uv(uv_b);
         self.ensure_transition_pipelines()?;
@@ -393,6 +406,26 @@ impl Renderer {
         progress: f32,
         fx: usize,
     ) -> Result<()> {
+        let (fx, code) = match crate::sketch::current() {
+            Some(sketch) => (paper_shaders::sketch_effect_index(fx), sketch.code()),
+            None => (fx, 0),
+        };
+        self.render_effect_code_to(rt, export, src_a, uv_a, src_b, uv_b, progress, fx, code)
+    }
+
+    #[cfg(feature = "shared-device")]
+    fn render_effect_code_to(
+        &mut self,
+        rt: &RenderTarget,
+        export: &mut ExportImage,
+        src_a: &Src,
+        uv_a: [f32; 4],
+        src_b: &Src,
+        uv_b: [f32; 4],
+        progress: f32,
+        fx: usize,
+        code: i32,
+    ) -> Result<()> {
         let uv_a = src_a.texture_uv(uv_a);
         let uv_b = src_b.texture_uv(uv_b);
         let pipe = self.effect_pipeline(fx)?;
@@ -432,7 +465,7 @@ impl Renderer {
             res: [self.extent.width as f32, self.extent.height as f32],
             progress: progress.clamp(0.0, 1.0),
             style: fx as i32,
-            pid_base: 0,
+            pid_base: code,
             fill: crate::fill_flag(),
             rgba_a: i32::from(matches!(src_a, Src::Rgba(_))),
             rgba_b: i32::from(matches!(src_b, Src::Rgba(_))),
@@ -486,6 +519,19 @@ impl Renderer {
         progress: f32,
         style: i32,
     ) -> Result<()> {
+        if let Some(sketch) = crate::sketch::current() {
+            return self.render_effect_code_to(
+                rt,
+                export,
+                src_a,
+                uv_a,
+                src_b,
+                uv_b,
+                progress,
+                paper_shaders::SKETCH_REVEAL_INDEX,
+                sketch.code(),
+            );
+        }
         let uv_a = src_a.texture_uv(uv_a);
         let uv_b = src_b.texture_uv(uv_b);
         self.ensure_transition_pipelines()?;

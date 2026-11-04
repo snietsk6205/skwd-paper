@@ -49,6 +49,17 @@ fn main() {
             "    include_bytes!(concat!(env!(\"OUT_DIR\"), \"/fx_{idx}.frag.spv\")),\n"
         ));
     }
+    let base = paper_shaders::EFFECTS.len();
+    for (offset, gl_src) in paper_shaders::sketch_variant_sources().iter().enumerate() {
+        let idx = base + offset;
+        let frag = format!("{out}/fx_{idx}.frag");
+        std::fs::write(&frag, paper_shaders::effect_frag_vk(gl_src))
+            .unwrap_or_else(|_| panic!("write sketch fx {idx}"));
+        compile(&frag, &format!("{out}/fx_{idx}.frag.spv"));
+        table.push_str(&format!(
+            "    include_bytes!(concat!(env!(\"OUT_DIR\"), \"/fx_{idx}.frag.spv\")),\n"
+        ));
+    }
     table.push_str("];\n");
     std::fs::write(format!("{out}/effects_gen.rs"), table).expect("write effects table");
 }
