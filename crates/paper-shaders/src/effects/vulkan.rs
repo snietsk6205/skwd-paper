@@ -85,7 +85,7 @@ fn desin_hashes(body: &str) -> String {
 /// Effects that grow from a point, and the source edits that let the
 /// renderer move that point (`fx_origin`). Each edit must match exactly once
 /// in that effect's source; the tests fail if upstream changes them.
-pub const ORIGIN_EFFECTS: [(&str, &[(&str, &str)]); 8] = [
+pub const ORIGIN_EFFECTS: [(&str, &[(&str, &str)]); 11] = [
     (
         "iris",
         &[
@@ -127,6 +127,19 @@ pub const ORIGIN_EFFECTS: [(&str, &[(&str, &str)]); 8] = [
         "polka-dots-curtain",
         &[("const vec2 center = vec2(0, 0);", "vec2 center = fx_origin(vec2(0.0));")],
     ),
+    // Custom build.
+    (
+        "ripple",
+        &[
+            (
+                "vec2 d = (uv - vec2(0.5)) * vec2(1.7777, 1.0);",
+                "vec2 d = (uv - fx_origin(vec2(0.5))) * vec2(1.7777, 1.0);",
+            ),
+            ("float front = p * 1.45;", "float front = p * 1.45 * fx_scale(vec2(0.5));"),
+        ],
+    ),
+    ("honeycomb", &[("const vec2 origin = vec2(0.5);", "vec2 origin = fx_origin(vec2(0.5));")]),
+    ("vortex", &[("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));")]),
 ];
 
 fn origin_edits(gl_src: &str) -> Option<&'static [(&'static str, &'static str)]> {

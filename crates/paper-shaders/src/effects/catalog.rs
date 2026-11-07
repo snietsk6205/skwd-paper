@@ -1,4 +1,7 @@
 use super::resources::{
+    BLINDS_FRAG, BURN_FRAG, HONEYCOMB_FRAG, PAGE_CURL_FRAG, RIPPLE_FRAG, SLIDE_FRAG, VORTEX_FRAG,
+};
+use super::resources::{
     CHROMATIC_BLOOM_FRAG, CIRCLE_CROP_FRAG, COLOUR_DISTANCE_FRAG, CROSSFADE_FRAG, CROSSHATCH_FRAG,
     CROSSWARP_FRAG, DIRECTIONAL_FRAG, DIRECTIONAL_SCALED_FRAG, DIRECTIONAL_WIPE_FRAG,
     FADECOLOR_FRAG, GLITCH_DISPLACE_FRAG, GLITCH_FRAG, HEAT_MELT_FRAG, INK_SPLASH_FRAG,
@@ -8,7 +11,7 @@ use super::resources::{
     ZOOM_BLUR_PULL_FRAG,
 };
 
-pub const EFFECTS: [(&str, &str); 30] = [
+pub const EFFECTS: [(&str, &str); 37] = [
     ("pixelate", PIXELATE_FRAG),
     ("iris", IRIS_FRAG),
     ("glitch", GLITCH_FRAG),
@@ -39,6 +42,14 @@ pub const EFFECTS: [(&str, &str); 30] = [
     ("parametric-glitch", PARAMETRIC_GLITCH_FRAG),
     ("perlin", PERLIN_FRAG),
     ("randomsquares", RANDOMSQUARES_FRAG),
+    // Custom build.
+    ("ripple", RIPPLE_FRAG),
+    ("honeycomb", HONEYCOMB_FRAG),
+    ("burn", BURN_FRAG),
+    ("page-curl", PAGE_CURL_FRAG),
+    ("blinds", BLINDS_FRAG),
+    ("slide", SLIDE_FRAG),
+    ("vortex", VORTEX_FRAG),
 ];
 
 pub fn effect_index(name: &str) -> Option<usize> {
