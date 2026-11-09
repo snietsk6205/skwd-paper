@@ -311,3 +311,28 @@ fn sketch_passes_share_the_header() {
     assert_eq!(sketch_style_index("unknown"), 0);
     assert_eq!(SKETCH_STYLES.len(), 7);
 }
+
+#[test]
+fn combo_compose_uses_the_transition_header() {
+    let src = combo_compose_frag_vk();
+    assert!(src.starts_with("#version 450"));
+    assert_eq!(src.matches("void main()").count(), 1);
+    assert!(src.contains("vec2 u_origin;") && src.contains("vec4 texB(vec2 p)"));
+    for mode in [1, 2, 3, 4, 5, 6] {
+        assert!(src.contains(&format!("u_style == {mode}")), "mode {mode}");
+    }
+}
+
+#[test]
+fn every_effect_name_is_unique_and_kebab_case() {
+    let mut names: Vec<&str> = EFFECTS.iter().map(|(name, _)| *name).collect();
+    for name in &names {
+        assert!(name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
+        assert!(!name.starts_with("combo") && *name != "random" && *name != "random-mix", "{name}");
+    }
+    let total = names.len();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), total);
+    assert!(EFFECTS.len() >= 68);
+}

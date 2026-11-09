@@ -48,9 +48,7 @@ pub(crate) fn stream(
         )?;
         send_packet(socket, &packet(5, slot as u8, 0, 0, 0, 0, 0), Some(semaphores[slot].fd))?;
     }
-    let shader = selected_shader(shader);
-    let sand = paper_shaders::sand_style_index(shader);
-    let effect = sand.is_none().then(|| paper_shaders::effect_index(shader)).flatten();
+    let plan = crate::sketch::transition_plan(Some(shader));
     let duration = std::time::Duration::from_millis(duration_ms.max(100));
     let interval = frame_interval;
     let started = Instant::now();
@@ -82,37 +80,16 @@ pub(crate) fn stream(
         };
         let a = Src::Rgba(a.view);
         let b = Src::Rgba(b.view);
-        match (sand, effect) {
-            (Some(style), _) => renderer.render_sand_to(
-                &targets[slot],
-                &mut exports[slot],
-                &a,
-                auv,
-                &b,
-                buv,
-                progress,
-                style,
-            )?,
-            (_, Some(effect)) => renderer.render_effect_to(
-                &targets[slot],
-                &mut exports[slot],
-                &a,
-                auv,
-                &b,
-                buv,
-                progress,
-                effect,
-            )?,
-            _ => renderer.render_fade_to(
-                &targets[slot],
-                &mut exports[slot],
-                &a,
-                auv,
-                &b,
-                buv,
-                progress * progress * (3.0 - 2.0 * progress),
-            )?,
-        }
+        renderer.render_plan_to(
+            &targets[slot],
+            &mut exports[slot],
+            &a,
+            auv,
+            &b,
+            buv,
+            progress,
+            plan,
+        )?;
         renderer.wait_frame_complete()?;
         render_time += render_started.elapsed();
         renderer.complete_external_signal(&semaphores[slot])?;

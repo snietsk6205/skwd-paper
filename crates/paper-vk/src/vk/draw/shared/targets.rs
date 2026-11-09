@@ -364,6 +364,7 @@ impl Renderer {
         uv: [f32; 4],
     ) -> Result<()> {
         self.release_idle_sketch()?;
+        self.release_idle_combo()?;
         let uv = src.texture_uv(uv);
         self.ensure_src_pipelines(&[src])?;
         unsafe {
@@ -435,7 +436,7 @@ impl Renderer {
 
     #[cfg(feature = "shared-device")]
     #[allow(clippy::too_many_arguments)]
-    fn render_fade_plain(
+    pub(super) fn render_fade_plain(
         &mut self,
         rt: &RenderTarget,
         export: &mut ExportImage,
@@ -521,7 +522,7 @@ impl Renderer {
 
     #[cfg(feature = "shared-device")]
     #[allow(clippy::too_many_arguments)]
-    fn render_effect_plain(
+    pub(super) fn render_effect_plain(
         &mut self,
         rt: &RenderTarget,
         export: &mut ExportImage,
@@ -621,7 +622,7 @@ impl Renderer {
 
     #[cfg(feature = "shared-device")]
     #[allow(clippy::too_many_arguments)]
-    fn render_sand_plain(
+    pub(super) fn render_sand_plain(
         &mut self,
         rt: &RenderTarget,
         export: &mut ExportImage,

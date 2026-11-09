@@ -85,7 +85,7 @@ fn desin_hashes(body: &str) -> String {
 /// Effects that grow from a point, and the source edits that let the
 /// renderer move that point (`fx_origin`). Each edit must match exactly once
 /// in that effect's source; the tests fail if upstream changes them.
-pub const ORIGIN_EFFECTS: [(&str, &[(&str, &str)]); 11] = [
+pub const ORIGIN_EFFECTS: [(&str, &[(&str, &str)]); 17] = [
     (
         "iris",
         &[
@@ -140,6 +140,37 @@ pub const ORIGIN_EFFECTS: [(&str, &[(&str, &str)]); 11] = [
     ),
     ("honeycomb", &[("const vec2 origin = vec2(0.5);", "vec2 origin = fx_origin(vec2(0.5));")]),
     ("vortex", &[("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));")]),
+    // Custom build (M3).
+    (
+        "god-rays",
+        &[
+            ("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));"),
+            ("float reach = p * 1.25;", "float reach = p * 1.25 * fx_scale(vec2(0.5));"),
+        ],
+    ),
+    ("diamonds", &[("const vec2 origin = vec2(0.5);", "vec2 origin = fx_origin(vec2(0.5));")]),
+    (
+        "shutter",
+        &[
+            ("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));"),
+            ("float reach = 1.25;", "float reach = 1.25 * fx_scale(vec2(0.5));"),
+        ],
+    ),
+    (
+        "lens",
+        &[
+            ("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));"),
+            ("float radius = e * 1.3;", "float radius = e * 1.3 * fx_scale(vec2(0.5));"),
+        ],
+    ),
+    (
+        "glass",
+        &[
+            ("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));"),
+            ("float reach = 1.1;", "float reach = 1.1 * fx_scale(vec2(0.5));"),
+        ],
+    ),
+    ("clock-wipe", &[("vec2 c = v_uv - vec2(0.5);", "vec2 c = v_uv - fx_origin(vec2(0.5));")]),
 ];
 
 fn origin_edits(gl_src: &str) -> Option<&'static [(&'static str, &'static str)]> {
@@ -147,6 +178,11 @@ fn origin_edits(gl_src: &str) -> Option<&'static [(&'static str, &'static str)]>
         let (_, src) = super::EFFECTS.iter().find(|(effect, _)| effect == name)?;
         (*src == gl_src).then_some(*edits)
     })
+}
+
+/// Custom build (M3): the pass that composes two transitions (`plan::Combo`).
+pub fn combo_compose_frag_vk() -> String {
+    format!("{VK_EFFECT_HEADER}{}", include_str!("combo.glsl"))
 }
 
 pub fn effect_frag_vk(gl_src: &str) -> String {

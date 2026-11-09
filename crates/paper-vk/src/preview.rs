@@ -47,23 +47,6 @@ fn load(path: &str) -> Result<(u32, u32, Vec<u8>)> {
     Ok((width, height, pixels))
 }
 
-fn selected_shader(name: &str) -> &str {
-    if name != "random" {
-        return name;
-    }
-    let choices = paper_shaders::SAND_STYLES.len() + paper_shaders::EFFECTS.len();
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.subsec_nanos() as usize)
-        .unwrap_or(0);
-    let index = nanos % choices.max(1);
-    if index < paper_shaders::SAND_STYLES.len() {
-        paper_shaders::SAND_STYLES[index]
-    } else {
-        paper_shaders::EFFECTS[index - paper_shaders::SAND_STYLES.len()].0
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn stream(
     from: &str,
@@ -105,9 +88,7 @@ pub(crate) fn stream(
     let readback = renderer.create_readback_buf(u64::from(width) * u64::from(height) * 4)?;
     let from_uv = crate::fill::mode_uv(from_width, from_height, width, height);
     let to_uv = crate::fill::mode_uv(to_width, to_height, width, height);
-    let shader = selected_shader(shader);
-    let sand = paper_shaders::sand_style_index(shader);
-    let effect = sand.is_none().then(|| paper_shaders::effect_index(shader)).flatten();
+    let plan = crate::sketch::transition_plan(Some(shader));
     unsafe {
         libc::fcntl(libc::STDOUT_FILENO, libc::F_SETPIPE_SZ, 1024 * 1024);
     }
@@ -143,32 +124,7 @@ pub(crate) fn stream(
         };
         let a = Src::Rgba(a.view);
         let b = Src::Rgba(b.view);
-        match (sand, effect) {
-            (Some(style), _) => renderer.render_sand_to(
-                &target,
-                &mut export,
-                &a,
-                a_uv,
-                &b,
-                b_uv,
-                progress,
-                style,
-            )?,
-            (None, Some(effect)) => renderer.render_effect_to(
-                &target,
-                &mut export,
-                &a,
-                a_uv,
-                &b,
-                b_uv,
-                progress,
-                effect,
-            )?,
-            (None, None) => {
-                let mix = progress * progress * (3.0 - 2.0 * progress);
-                renderer.render_fade_to(&target, &mut export, &a, a_uv, &b, b_uv, mix)?;
-            }
-        }
+        renderer.render_plan_to(&target, &mut export, &a, a_uv, &b, b_uv, progress, plan)?;
         renderer.read_export_to(&export, &readback, width, height)?;
         let bgra = unsafe {
             std::slice::from_raw_parts(readback.ptr, width as usize * height as usize * 4)
@@ -652,8 +608,7 @@ struct VideoStreamer {
     ctl: crate::ctl::Ctl,
     upload: Option<crate::vk::UploadPath>,
     transition: Option<Transition>,
-    sand: Option<i32>,
-    effect: Option<usize>,
+    plan: paper_shaders::plan::Plan,
     duration: std::time::Duration,
     frame_step: f64,
     frame_duration: std::time::Duration,
@@ -789,14 +744,12 @@ impl VideoStreamer {
                     finish_transition = progress >= 1.0;
                     let target = &sink.targets[slot];
                     let export = &mut sink.exports[slot];
-                    match (progress, self.sand, self.effect) {
-                        (progress, _, _) if progress <= 0.0 => {
-                            sink.renderer.render_to(target, export, old_source, sink.old_uv)?
-                        }
-                        (progress, _, _) if progress >= 1.0 => {
-                            sink.renderer.render_to(target, export, &source, sink.uv)?
-                        }
-                        (_, Some(style), _) => sink.renderer.render_sand_to(
+                    if progress <= 0.0 {
+                        sink.renderer.render_to(target, export, old_source, sink.old_uv)?;
+                    } else if progress >= 1.0 {
+                        sink.renderer.render_to(target, export, &source, sink.uv)?;
+                    } else {
+                        sink.renderer.render_plan_to(
                             target,
                             export,
                             old_source,
@@ -804,27 +757,8 @@ impl VideoStreamer {
                             &source,
                             sink.uv,
                             progress,
-                            style,
-                        )?,
-                        (_, None, Some(effect)) => sink.renderer.render_effect_to(
-                            target,
-                            export,
-                            old_source,
-                            sink.old_uv,
-                            &source,
-                            sink.uv,
-                            progress,
-                            effect,
-                        )?,
-                        (_, None, None) => sink.renderer.render_fade_to(
-                            target,
-                            export,
-                            old_source,
-                            sink.old_uv,
-                            &source,
-                            sink.uv,
-                            progress * progress * (3.0 - 2.0 * progress),
-                        )?,
+                            self.plan,
+                        )?;
                     }
                 }
                 _ => sink.renderer.render_to(
@@ -923,9 +857,7 @@ pub(crate) fn dmabuf_video_stream(
         }
         None => None,
     };
-    let shader = selected_shader(shader);
-    let sand = paper_shaders::sand_style_index(shader);
-    let effect = sand.is_none().then(|| paper_shaders::effect_index(shader)).flatten();
+    let plan = crate::sketch::transition_plan(Some(shader));
     let mut ctl = crate::ctl::Ctl::start(path, mute, volume, true);
     ctl.route_output_pauses();
     ctl.set_paused(targets.iter().all(|target| target.paused));
@@ -937,8 +869,7 @@ pub(crate) fn dmabuf_video_stream(
         ctl,
         upload,
         transition,
-        sand,
-        effect,
+        plan,
         duration: std::time::Duration::from_millis(duration_ms.max(100)),
         frame_step,
         frame_duration: std::time::Duration::from_secs_f64(frame_step),

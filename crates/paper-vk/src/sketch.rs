@@ -145,6 +145,12 @@ pub(crate) fn ease(t: f32) -> f32 {
 }
 
 /// A pseudo-random value that differs for every call (time and counter mixed).
+/// Custom build (M3): what a `--shader` value asks for (one transition or two
+/// combined); "random" and "random-mix" roll here.
+pub(crate) fn transition_plan(name: Option<&str>) -> paper_shaders::plan::Plan {
+    paper_shaders::plan::plan(name.unwrap_or("fade"), &mut random_u32)
+}
+
 pub(crate) fn random_u32() -> u32 {
     use std::sync::atomic::{AtomicU32, Ordering};
     static COUNTER: AtomicU32 = AtomicU32::new(0x9e37_79b9);

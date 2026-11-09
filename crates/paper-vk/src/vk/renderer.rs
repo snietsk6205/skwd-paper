@@ -73,6 +73,7 @@ pub struct Renderer {
     pub(super) scene_timestamp_active: bool,
     pub(super) scene_gpu_time_ns: Option<u64>,
     pub(crate) sketch: super::sketch::SketchState,
+    pub(crate) combo: super::combo::ComboState,
 }
 
 impl Renderer {
@@ -513,6 +514,7 @@ impl Renderer {
                 scene_timestamp_active,
                 scene_gpu_time_ns: None,
                 sketch: Default::default(),
+                combo: Default::default(),
             };
             if drm_modifier_ext {
                 renderer.import_modifiers = [
@@ -531,6 +533,8 @@ impl Drop for Renderer {
             let _ = self.device.device_wait_idle();
             let mut sketch = std::mem::take(&mut self.sketch);
             sketch.destroy(&self.device);
+            let mut combo = std::mem::take(&mut self.combo);
+            combo.destroy(&self.device);
             for (_, (lv, cv)) in self.plane_views.drain() {
                 self.device.destroy_image_view(lv, None);
                 self.device.destroy_image_view(cv, None);

@@ -54,6 +54,7 @@ fn main() {
         ("sketch_analysis", paper_shaders::sketch_analysis_frag_vk()),
         ("sketch_compose", paper_shaders::sketch_compose_frag_vk()),
         ("sketch_density", paper_shaders::sketch_density_frag_vk()),
+        ("combo_compose", paper_shaders::combo_compose_frag_vk()),
     ] {
         let frag = format!("{out}/{name}.frag");
         std::fs::write(&frag, source).unwrap_or_else(|_| panic!("write {name}"));

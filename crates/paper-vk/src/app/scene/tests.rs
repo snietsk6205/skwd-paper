@@ -39,16 +39,34 @@ fn taking_a_texture_key_releases_the_model_payload() {
 #[test]
 fn scene_transitions_accept_standard_effects() {
     let effect = paper_shaders::effect_index("inkwell-drop").unwrap();
-    assert_eq!(transition_style(Some("inkwell-drop")), TransitionStyle::Effect(effect));
+    assert_eq!(
+        transition_style(Some("inkwell-drop")),
+        TransitionStyle::Single(paper_shaders::plan::Part::Effect(effect))
+    );
+}
+
+#[test]
+fn scene_transitions_accept_combinations() {
+    let plan = transition_style(Some("combo:then:burn:ripple"));
+    assert!(matches!(plan, TransitionStyle::Combo(_)), "{plan:?}");
 }
 
 #[test]
 fn scene_transitions_keep_sand_and_fade_fallbacks() {
     let sand = paper_shaders::sand_style_index("sand-donut").unwrap();
-    assert_eq!(transition_style(Some("sand-donut")), TransitionStyle::Sand(sand));
-    assert_eq!(transition_style(Some("fade")), TransitionStyle::Fade);
-    assert_eq!(transition_style(Some("not-a-transition")), TransitionStyle::Fade);
-    assert_eq!(transition_style(None), TransitionStyle::Fade);
+    assert_eq!(
+        transition_style(Some("sand-donut")),
+        TransitionStyle::Single(paper_shaders::plan::Part::Sand(sand))
+    );
+    assert_eq!(
+        transition_style(Some("fade")),
+        TransitionStyle::Single(paper_shaders::plan::Part::Fade)
+    );
+    assert_eq!(
+        transition_style(Some("not-a-transition")),
+        TransitionStyle::Single(paper_shaders::plan::Part::Fade)
+    );
+    assert_eq!(transition_style(None), TransitionStyle::Single(paper_shaders::plan::Part::Fade));
 }
 
 #[test]

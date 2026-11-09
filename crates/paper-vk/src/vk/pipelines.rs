@@ -247,6 +247,29 @@ impl Renderer {
     }
 }
 
+impl Renderer {
+    /// Custom build (M3): the pass that composes two transitions on screen.
+    #[cfg(feature = "shared-device")]
+    pub(crate) fn build_combo_pipeline(&self) -> Result<vk::Pipeline> {
+        unsafe {
+            build_pipeline(
+                &self.device,
+                &PipelineSpec {
+                    vert: include_bytes!(concat!(env!("OUT_DIR"), "/sand_base.vert.spv")),
+                    frag: include_bytes!(concat!(env!("OUT_DIR"), "/combo_compose.frag.spv")),
+                    topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+                    blend: vk::PipelineColorBlendAttachmentState::default()
+                        .color_write_mask(vk::ColorComponentFlags::RGBA),
+                    dynamic: &[],
+                    layout: self.pipeline_layout_sand,
+                    render_pass: self.render_pass,
+                    extent: self.extent,
+                },
+            )
+        }
+    }
+}
+
 fn make_module(device: &ash::Device, bytes: &[u8]) -> Result<vk::ShaderModule> {
     let words: Vec<u32> = bytes
         .chunks_exact(4)

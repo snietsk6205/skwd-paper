@@ -429,7 +429,7 @@ impl Renderer {
         self.wait_frame_complete()
     }
 
-    fn begin_target_pass(&self, target: TargetHandles) {
+    pub(super) fn begin_target_pass(&self, target: TargetHandles) {
         let clear =
             [vk::ClearValue { color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 1.0] } }];
         unsafe {
@@ -528,7 +528,7 @@ impl Renderer {
         Ok(())
     }
 
-    fn create_sketch_target(
+    pub(super) fn create_sketch_target(
         &self,
         extent: vk::Extent2D,
         format: vk::Format,
@@ -621,14 +621,14 @@ impl Renderer {
 /// The handles a pass needs from a target, copied so the target can stay
 /// borrowed inside the renderer while the pass records.
 #[derive(Clone, Copy)]
-struct TargetHandles {
-    framebuffer: vk::Framebuffer,
-    render_pass: vk::RenderPass,
-    extent: vk::Extent2D,
+pub(super) struct TargetHandles {
+    pub(super) framebuffer: vk::Framebuffer,
+    pub(super) render_pass: vk::RenderPass,
+    pub(super) extent: vk::Extent2D,
 }
 
 impl TargetHandles {
-    fn of(target: &SceneTarget) -> Self {
+    pub(super) fn of(target: &SceneTarget) -> Self {
         Self {
             framebuffer: target.framebuffer,
             render_pass: target.render_pass,

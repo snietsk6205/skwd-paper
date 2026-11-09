@@ -1090,12 +1090,8 @@ struct FadeSource {
     height: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TransitionStyle {
-    Sand(i32),
-    Effect(usize),
-    Fade,
-}
+/// Custom build (M3): one transition or two combined (`paper_shaders::plan`).
+type TransitionStyle = paper_shaders::plan::Plan;
 
 struct Group {
     scripts: Option<script::Scripts>,
@@ -1283,40 +1279,16 @@ impl Presenter {
         let to_uv =
             mode_uv(group.target.extent.width, group.target.extent.height, self.width, self.height);
         let to = vk::Src::Rgba(group.target.view);
-        match style {
-            TransitionStyle::Sand(style) => self.renderer.render_sand_to(
-                &self.rts[rt_index],
-                export,
-                &from,
-                from_uv,
-                &to,
-                to_uv,
-                progress,
-                style,
-            ),
-            TransitionStyle::Effect(effect) => self.renderer.render_effect_to(
-                &self.rts[rt_index],
-                export,
-                &from,
-                from_uv,
-                &to,
-                to_uv,
-                progress,
-                effect,
-            ),
-            TransitionStyle::Fade => {
-                let mix = progress * progress * (3.0 - 2.0 * progress);
-                self.renderer.render_fade_to(
-                    &self.rts[rt_index],
-                    export,
-                    &from,
-                    from_uv,
-                    &to,
-                    to_uv,
-                    mix,
-                )
-            }
-        }
+        self.renderer.render_plan_to(
+            &self.rts[rt_index],
+            export,
+            &from,
+            from_uv,
+            &to,
+            to_uv,
+            progress,
+            style,
+        )
     }
 
     fn read_export_to(&mut self, buffer_index: usize, rb: &vk::ReadbackBuf) -> Result<()> {
@@ -4076,32 +4048,15 @@ fn load_from_frame(group: &mut Group, path: &str) -> Result<()> {
 }
 
 fn transition_style(shader: Option<&str>) -> TransitionStyle {
-    let Some(mut name) = shader else {
-        return TransitionStyle::Fade;
-    };
-    if name == "random" {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.subsec_nanos())
-            .unwrap_or(0);
-        let sand = paper_shaders::SAND_STYLES.len();
-        let pick = nanos as usize % (sand + paper_shaders::EFFECTS.len());
-        name = if pick < sand {
-            paper_shaders::SAND_STYLES[pick]
-        } else {
-            paper_shaders::EFFECTS[pick - sand].0
-        };
-    }
-    if let Some(style) = paper_shaders::sand_style_index(name) {
-        return TransitionStyle::Sand(style);
-    }
-    if let Some(effect) = paper_shaders::effect_index(name) {
-        return TransitionStyle::Effect(effect);
-    }
-    if !name.is_empty() && name != "fade" {
+    let plan = crate::sketch::transition_plan(shader);
+    let name = shader.unwrap_or("");
+    if plan == paper_shaders::plan::Plan::Single(paper_shaders::plan::Part::Fade)
+        && !name.is_empty()
+        && name != "fade"
+    {
         tracing::info!("skwd-wall-vk: scene transition shader {name} unsupported, fading");
     }
-    TransitionStyle::Fade
+    plan
 }
 
 fn locate_pkg(dir: &str) -> Result<std::path::PathBuf> {
@@ -5037,7 +4992,7 @@ pub(super) fn stream_scene(
     let mut property_frame = false;
     let mut fade_ms = 0u64;
     let mut fade_first_frame = false;
-    let mut trans_style = TransitionStyle::Fade;
+    let mut trans_style = TransitionStyle::Single(paper_shaders::plan::Part::Fade);
     let mut free = vec![[true; 3]; targets.len()];
     let mut emitted = vec![false; targets.len()];
     let mut render_pending = vec![true; targets.len()];

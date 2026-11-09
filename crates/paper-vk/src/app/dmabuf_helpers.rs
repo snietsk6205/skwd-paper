@@ -567,31 +567,12 @@ fn finish_swap(
     let uvs_b: Vec<[f32; 4]> = dims.iter().map(|&(w, h)| mode_uv(bw, bh, w, h)).collect();
     let still_b = pending.still.load(std::sync::atomic::Ordering::Relaxed);
     ctl.swap_audio(&pending.req.to, !still_b);
-    let shader = pending.req.shader.as_deref().map(|name| {
-        if name == "random" {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.subsec_nanos())
-                .unwrap_or(0);
-            let sand = paper_shaders::SAND_STYLES.len();
-            let pick = nanos as usize % (sand + paper_shaders::EFFECTS.len());
-            if pick < sand {
-                paper_shaders::SAND_STYLES[pick]
-            } else {
-                paper_shaders::EFFECTS[pick - sand].0
-            }
-        } else {
-            name
-        }
-    });
-    let style = shader.and_then(paper_shaders::sand_style_index);
-    let effect = if style.is_none() { shader.and_then(paper_shaders::effect_index) } else { None };
+    let plan = crate::sketch::transition_plan(pending.req.shader.as_deref());
     tracing::info!(
-        "skwd-wall-vk: swap to {} ({}ms, style {:?}, effect {:?})",
+        "skwd-wall-vk: swap to {} ({}ms, transition {})",
         pending.req.to,
         pending.req.duration_ms,
-        style,
-        effect.map(|fx| paper_shaders::EFFECTS[fx].0)
+        paper_shaders::plan::describe(plan)
     );
     FadeState {
         rx: pending.rx,
@@ -604,8 +585,7 @@ fn finish_swap(
         t0: Instant::now(),
         dur_ms: pending.req.duration_ms,
         uvs: uvs_b,
-        style,
-        effect,
+        plan,
         still_b,
         first_frame: true,
         path: pending.req.to,
@@ -646,11 +626,7 @@ pub(super) fn prepare_transition_pipelines(
     rgba: bool,
 ) -> Result<()> {
     for renderer in renderers {
-        if let Some(effect) = fade.effect {
-            renderer.effect_pipeline(effect)?;
-        } else {
-            renderer.ensure_transition_pipelines()?;
-        }
+        renderer.prepare_plan(fade.plan)?;
         if rgba {
             renderer.ensure_rgba_pipelines()?;
         }
@@ -740,18 +716,7 @@ pub(super) fn render_video(
     } else {
         crate::sketch::SketchMedia::Video
     });
-    match (fade.style, fade.effect) {
-        (Some(style), _) => {
-            renderer.render_sand_to(rt, export, &src_a, uv_a, &src_b, uv_b, t, style)
-        }
-        (None, Some(fx)) => {
-            renderer.render_effect_to(rt, export, &src_a, uv_a, &src_b, uv_b, t, fx)
-        }
-        (None, None) => {
-            let mix = t * t * (3.0 - 2.0 * t);
-            renderer.render_fade_to(rt, export, &src_a, uv_a, &src_b, uv_b, mix)
-        }
-    }
+    renderer.render_plan_to(rt, export, &src_a, uv_a, &src_b, uv_b, t, fade.plan)
 }
 
 pub(super) fn render_pattern(

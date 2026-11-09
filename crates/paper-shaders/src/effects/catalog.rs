@@ -1,4 +1,12 @@
 use super::resources::{
+    ACCORDION_FRAG, AURORA_FRAG, BARN_DOORS_FRAG, CHECKERBOARD_FRAG, CLOCK_WIPE_FRAG, CRT_FRAG,
+    CURTAIN_FRAG, DATAMOSH_FRAG, DIAMONDS_FRAG, DREAM_BLUR_FRAG, FILM_DISSOLVE_FRAG, FLAG_FRAG,
+    FLASHBULB_FRAG, GLASS_FRAG, GOD_RAYS_FRAG, HALFTONE_FRAG, KALEIDOSCOPE_FRAG, LENS_FRAG,
+    LIGHT_LEAK_FRAG, LIQUID_FRAG, LUMA_FADE_FRAG, NEON_EDGES_FRAG, PAPER_TEAR_FRAG, PRISM_FRAG,
+    SHUTTER_FRAG, SPIRAL_TILES_FRAG, STRIPES_FRAG, SUNRISE_FRAG, TRIANGLES_FRAG, TUNNEL_FRAG,
+    WAVE_WIPE_FRAG,
+};
+use super::resources::{
     BLINDS_FRAG, BURN_FRAG, HONEYCOMB_FRAG, PAGE_CURL_FRAG, RIPPLE_FRAG, SLIDE_FRAG, VORTEX_FRAG,
 };
 use super::resources::{
@@ -11,7 +19,7 @@ use super::resources::{
     ZOOM_BLUR_PULL_FRAG,
 };
 
-pub const EFFECTS: [(&str, &str); 37] = [
+pub const EFFECTS: [(&str, &str); 68] = [
     ("pixelate", PIXELATE_FRAG),
     ("iris", IRIS_FRAG),
     ("glitch", GLITCH_FRAG),
@@ -50,6 +58,40 @@ pub const EFFECTS: [(&str, &str); 37] = [
     ("blinds", BLINDS_FRAG),
     ("slide", SLIDE_FRAG),
     ("vortex", VORTEX_FRAG),
+    // Custom build (M3): Light.
+    ("light-leak", LIGHT_LEAK_FRAG),
+    ("flashbulb", FLASHBULB_FRAG),
+    ("aurora", AURORA_FRAG),
+    ("prism", PRISM_FRAG),
+    ("god-rays", GOD_RAYS_FRAG),
+    ("neon-edges", NEON_EDGES_FRAG),
+    ("sunrise", SUNRISE_FRAG),
+    // Custom build (M3): Shapes.
+    ("diamonds", DIAMONDS_FRAG),
+    ("triangles", TRIANGLES_FRAG),
+    ("checkerboard", CHECKERBOARD_FRAG),
+    ("stripes", STRIPES_FRAG),
+    ("halftone", HALFTONE_FRAG),
+    ("spiral-tiles", SPIRAL_TILES_FRAG),
+    ("shutter", SHUTTER_FRAG),
+    ("kaleidoscope", KALEIDOSCOPE_FRAG),
+    // Custom build (M3): Warp, Break, Fade, Wipe.
+    ("liquid", LIQUID_FRAG),
+    ("lens", LENS_FRAG),
+    ("flag", FLAG_FRAG),
+    ("tunnel", TUNNEL_FRAG),
+    ("accordion", ACCORDION_FRAG),
+    ("glass", GLASS_FRAG),
+    ("paper-tear", PAPER_TEAR_FRAG),
+    ("crt", CRT_FRAG),
+    ("datamosh", DATAMOSH_FRAG),
+    ("luma-fade", LUMA_FADE_FRAG),
+    ("dream-blur", DREAM_BLUR_FRAG),
+    ("film-dissolve", FILM_DISSOLVE_FRAG),
+    ("clock-wipe", CLOCK_WIPE_FRAG),
+    ("barn-doors", BARN_DOORS_FRAG),
+    ("curtain", CURTAIN_FRAG),
+    ("wave-wipe", WAVE_WIPE_FRAG),
 ];
 
 pub fn effect_index(name: &str) -> Option<usize> {

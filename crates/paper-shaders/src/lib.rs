@@ -1,11 +1,13 @@
 #![deny(unsafe_code)]
 
 mod effects;
+pub mod plan;
 mod sand;
 
 pub use effects::{
-    EFFECTS, ORIGIN_EFFECTS, SKETCH_DENSITY_SIZE, SKETCH_STYLES, effect_frag_vk, effect_index,
-    sketch_analysis_frag_vk, sketch_compose_frag_vk, sketch_density_frag_vk, sketch_style_index,
+    EFFECTS, ORIGIN_EFFECTS, SKETCH_DENSITY_SIZE, SKETCH_STYLES, combo_compose_frag_vk,
+    effect_frag_vk, effect_index, sketch_analysis_frag_vk, sketch_compose_frag_vk,
+    sketch_density_frag_vk, sketch_style_index,
 };
 pub use sand::{
     Dialect, SAND_A_ONLY_BELOW, SAND_B_ONLY_FROM, SAND_BASE_FRAG_GL, SAND_BASE_FRAG_VK,

@@ -1,3 +1,4 @@
+mod combo;
 mod draw;
 mod effect;
 mod export;
